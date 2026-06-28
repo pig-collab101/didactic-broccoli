@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>🐷 돼지가 숨긴 숫자를 찾아라!</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Jua&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{
+  background:#0d0d0d;
+  color:#00ffcc;
+  font-family:'Jua',sans-serif;
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow-x:hidden;
+  user-select:none;
+}
+
+/* ── 배경 파티클 ── */
+#bg-canvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;}
+
+/* ── 메인 래퍼 ── */
+#wrap{
+  position:relative;
+  z-index:1;
+  width:min(520px,96vw);
+  background:#000;
+  border:3px solid #00ffcc;
+  box-shadow:0 0 30px #00ffcc44,0 0 60px #00ffcc22;
+  padding:18px 16px 20px;
+}
+
+/* ── 타이틀 ── */
+h1{
+  font-family:'Press Start 2P',monospace;
+  font-size:10px;
+  color:#ffe84d;
+  text-align:center;
+  text-shadow:2px 2px #ff4444,4px 4px #000;
+  line-height:1.8;
+  margin-bottom:10px;
+}
+
+/* ── 돼지 픽셀 아트 (SVG) ── */
+#pig-area{
+  display:flex;
+  justify-content:center;
+  margin:6px 0;
+  height:64px;
+  position:relative;
+}
+#pig-svg{
+  transition:transform .15s;
+  image-rendering:pixelated;
+}
+#pig-svg.bounce{animation:pigBounce .35s ease;}
+@keyframes pigBounce{0%{transform:scale(1);}40%{transform:scale(1.3,0.75);}70%{transform:scale(0.85,1.2);}100%{transform:scale(1);}}
+#pig-svg.shake{animation:pigShake .3s linear;}
+@keyframes pigShake{0%{transform:translateX(0);}20%{transform:translateX(-8px);}40%{transform:translateX(8px);}60%{transform:translateX(-6px);}80%{transform:translateX(6px);}100%{transform:translateX(0);}}
+
+/* ── 말풍선 ── */
+#bubble{
+  font-family:'Jua',sans-serif;
+  font-size:15px;
+  background:#001a00;
+  border:2px solid #00ffcc;
+  border-radius:8px;
+  padding:8px 12px;
+  text-align:center;
+  margin:6px 0 10px;
+  min-height:44px;
+  color:#00ffcc;
+  position:relative;
+  line-height:1.5;
+  transition:all .2s;
+}
+#bubble.warn{border-color:#ff4444;color:#ff4444;background:#1a0000;}
+#bubble.win{border-color:#ffe84d;color:#ffe84d;background:#1a1400;animation:glowPulse .5s infinite alternate;}
+@keyframes glowPulse{to{box-shadow:0 0 20px #ffe84d88;}}
+
+/* ── 힌트 표시줄 ── */
+#hint-bar{
+  font-family:'Press Start 2P',monospace;
+  font-size:9px;
+  text-align:center;
+  min-height:22px;
+  margin-bottom:8px;
+  transition:all .2s;
+}
+#hint-bar.up{color:#ff8800;}
+#hint-bar.down{color:#4488ff;}
+#hint-bar.win{color:#ffe84d;animation:blink .4s infinite alternate;}
+@keyframes blink{to{opacity:.3;}}
+
+/* ── 시도 횟수 표시 ── */
+#tries-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom:10px;
+  font-family:'Press Start 2P',monospace;
+  font-size:6px;
+}
+#tries-hearts{font-size:14px;letter-spacing:2px;}
+#range-txt{color:#555;}
+
+/* ── 입력 영역 ── */
+#input-row{
+  display:flex;
+  gap:8px;
+  margin-bottom:10px;
+}
+#num-input{
+  flex:1;
+  background:#000;
+  border:2px solid #00ffcc;
+  color:#00ffcc;
+  font-family:'Press Start 2P',monospace;
+  font-size:16px;
+  padding:8px 10px;
+  text-align:center;
+  outline:none;
+  caret-color:#00ffcc;
+}
+#num-input:focus{border-color:#ffe84d;box-shadow:0 0 10px #ffe84d44;}
+#num-input:disabled{opacity:.3;cursor:not-allowed;}
+
+#guess-btn{
+  font-family:'Press Start 2P',monospace;
+  font-size:7px;
+  padding:8px 12px;
+  border:2px solid #00ffcc;
+  background:#000;
+  color:#00ffcc;
+  cursor:pointer;
+  white-space:nowrap;
+  transition:all .1s;
+}
+#guess-btn:hover:not(:disabled){background:#003322;}
+#guess-btn:active:not(:disabled){background:#005544;transform:scale(.95);}
+#guess-btn:disabled{opacity:.3;cursor:not-allowed;}
+
+/* ── 히스토리 ── */
+#history-wrap{
+  background:#050505;
+  border:1px solid #1a3a1a;
+  padding:6px 8px;
+  min-height:50px;
+  max-height:120px;
+  overflow-y:auto;
+  margin-bottom:10px;
+  font-family:'Press Start 2P',monospace;
+  font-size:6px;
+  line-height:2;
+}
+.h-row{display:flex;gap:8px;align-items:center;}
+.h-num{color:#fff;min-width:32px;}
+.h-res.up{color:#ff8800;}
+.h-res.down{color:#4488ff;}
+.h-res.win{color:#ffe84d;}
+
+/* ── 난이도 선택 ── */
+#diff-row{
+  display:flex;
+  gap:6px;
+  margin-bottom:10px;
+  flex-wrap:wrap;
+}
+.diff-btn{
+  font-family:'Press Start 2P',monospace;
+  font-size:5px;
+  padding:4px 7px;
+  border:2px solid #333;
+  background:#000;
+  color:#555;
+  cursor:pointer;
+  flex:1;
+  text-align:center;
+  transition:all .1s;
+}
+.diff-btn.on{border-color:#00ffcc;color:#00ffcc;background:#001a11;}
+.diff-btn:hover:not(.on){border-color:#444;color:#888;}
+
+/* ── 하단 버튼 ── */
+#bottom-row{display:flex;gap:6px;}
+.bot-btn{
+  font-family:'Press Start 2P',monospace;
+  font-size:6px;
+  padding:6px 10px;
+  border:2px solid #00ffcc;
+  background:#000;
+  color:#00ffcc;
+  cursor:pointer;
+  flex:1;
+}
+.bot-btn:hover{background:#003322;}
+#score-txt{
+  font-family:'Press Start 2P',monospace;
+  font-size:5px;
+  color:#ffe84d;
+  text-align:center;
+  margin-top:6px;
+}
+
+/* ── 승리/패배 오버레이 ── */
+#overlay{
+  display:none;
+  position:absolute;
+  inset:0;
+  background:rgba(0,0,0,.88);
+  z-index:20;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+}
+#overlay.show{display:flex;}
+#ov-title{
+  font-family:'Press Start 2P',monospace;
+  font-size:14px;
+  text-align:center;
+  line-height:1.8;
+}
+#ov-sub{
+  font-family:'Jua',sans-serif;
+  font-size:16px;
+  color:#aaa;
+  text-align:center;
+}
+#ov-btn{
+  font-family:'Press Start 2P',monospace;
+  font-size:8px;
+  padding:10px 18px;
+  border:2px solid #00ffcc;
+  background:#000;
+  color:#00ffcc;
+  cursor:pointer;
+}
+#ov-btn:hover{background:#003322;}
+
+/* ── 플로팅 텍스트 ── */
+.float-txt{
+  position:fixed;
+  font-family:'Press Start 2P',monospace;
+  font-size:11px;
+  pointer-events:none;
+  z-index:99;
+  white-space:nowrap;
+  text-shadow:1px 1px #000;
+}
+</style>
+</head>
+<body>
+<canvas id="bg-canvas"></canvas>
+
+<div id="wrap" style="position:relative;">
+  <h1>🐷 돼지가 숫자를<br>숨겨버렸다!</h1>
+
+  <!-- 돼지 픽셀 아트 -->
+  <div id="pig-area">
+    <svg id="pig-svg" xmlns="http://www.w3.org/2000/svg" width="72" height="81" style="overflow:visible;display:block;">
+      <!-- 귀 -->
+      <rect x="12" y="0" width="6" height="6" fill="#f09090" shape-rendering="crispEdges"/>
+      <rect x="18" y="0" width="6" height="6" fill="#f09090" shape-rendering="crispEdges"/>
+      <rect x="42" y="0" width="6" height="6" fill="#f09090" shape-rendering="crispEdges"/>
+      <rect x="48" y="0" width="6" height="6" fill="#f09090" shape-rendering="crispEdges"/>
+      <!-- 머리 -->
+      <rect x="6" y="6" width="60" height="18" fill="#f7bfbf" shape-rendering="crispEdges"/>
+      <!-- 눈 -->
+      <rect x="18" y="12" width="6" height="6" fill="#333" shape-rendering="crispEdges"/>
+      <rect x="48" y="12" width="6" height="6" fill="#333" shape-rendering="crispEdges"/>
+      <!-- 코 -->
+      <rect x="24" y="18" width="24" height="12" fill="#e87070" shape-rendering="crispEdges"/>
+      <rect x="27" y="21" width="6" height="6" fill="#c05050" shape-rendering="crispEdges"/>
+      <rect x="39" y="21" width="6" height="6" fill="#c05050" shape-rendering="crispEdges"/>
+      <!-- 몸통 -->
+      <rect x="0" y="30" width="72" height="24" fill="#f7bfbf" shape-rendering="crispEdges"/>
+      <!-- 배 -->
+      <rect x="6" y="36" width="60" height="12" fill="#f9d4d4" shape-rendering="crispEdges"/>
+      <!-- 다리 -->
+      <rect x="6" y="54" width="12" height="18" fill="#d08080" shape-rendering="crispEdges"/>
+      <rect x="24" y="54" width="12" height="18" fill="#d08080" shape-rendering="crispEdges"/>
+      <rect x="36" y="54" width="12" height="18" fill="#d08080" shape-rendering="crispEdges"/>
+      <rect x="54" y="54" width="12" height="18" fill="#d08080" shape-rendering="crispEdges"/>
+      <!-- 발 -->
+      <rect x="6" y="72" width="12" height="6" fill="#c07070" shape-rendering="crispEdges"/>
+      <rect x="24" y="72" width="12" height="6" fill="#c07070" shape-rendering="crispEdges"/>
+      <rect x="36" y="72" width="12" height="6" fill="#c07070" shape-rendering="crispEdges"/>
+      <rect x="54" y="72" width="12" height="6" fill="#c07070" shape-rendering="crispEdges"/>
+    </svg>
+  </div>
+
+  <!-- 말풍선 -->
+  <div id="bubble">🐷 내가 숫자를 하나 골랐는데...<br>맞혀보시겠어요? 히히!</div>
+
+  <!-- 힌트 -->
+  <div id="hint-bar"></div>
+
+  <!-- 시도 횟수 / 범위 -->
+  <div id="tries-row">
+    <span id="tries-hearts">❤️❤️❤️❤️❤️❤️❤️❤️❤️❤️</span>
+    <span id="range-txt">범위: 1 ~ 100</span>
+  </div>
+
+  <!-- 난이도 -->
+  <div id="diff-row">
+    <button class="diff-btn on" data-diff="easy">😌 쉬움<br>1~50 / 15번</button>
+    <button class="diff-btn" data-diff="normal">😏 보통<br>1~100 / 10번</button>
+    <button class="diff-btn" data-diff="hard">😈 어려움<br>1~200 / 7번</button>
+    <button class="diff-btn" data-diff="pig">🐷 돼지<br>1~500 / 5번</button>
+  </div>
+
+  <!-- 입력 -->
+  <div id="input-row">
+    <input id="num-input" type="number" min="1" max="100" placeholder="숫자 입력">
+    <button id="guess-btn">🐷 도전!</button>
+  </div>
+
+  <!-- 히스토리 -->
+  <div id="history-wrap">
+    <span style="color:#333;">— 추측 기록이 여기에 표시됩니다 —</span>
+  </div>
+
+  <!-- 하단 -->
+  <div id="bottom-row">
+    <button class="bot-btn" id="new-btn">🔄 새 게임</button>
+    <button class="bot-btn" id="hint-btn">💡 힌트 (−2❤️)</button>
+  </div>
+  <div id="score-txt">🏆 최고 기록: — 번</div>
+
+  <!-- 승리/패배 오버레이 -->
+  <div id="overlay">
+    <div id="ov-title">?</div>
+    <div id="ov-sub"></div>
+    <button id="ov-btn">🐷 다시 도전!</button>
+  </div>
+</div>
+
+<script>
+/* ─────────────────────────────────────────
+   배경 파티클 (돼지 발자국)
+───────────────────────────────────────── */
+const cvs = document.getElementById('bg-canvas');
+const ctx2 = cvs.getContext('2d');
+const parts = [];
+function resizeCvs(){cvs.width=innerWidth;cvs.height=innerHeight;}
+resizeCvs();
+window.addEventListener('resize',resizeCvs);
+
+for(let i=0;i<30;i++){
+  parts.push({
+    x:Math.random()*innerWidth,
+    y:Math.random()*innerHeight,
+    size:Math.random()*14+6,
+    vx:(Math.random()-.5)*.4,
+    vy:(Math.random()-.5)*.4,
+    alpha:Math.random()*.15+.04,
+    emoji:['🐾','🐷','💨','🌀','✨'][Math.floor(Math.random()*5)],
+  });
+}
+function animBg(){
+  ctx2.clearRect(0,0,cvs.width,cvs.height);
+  ctx2.font='20px serif';
+  parts.forEach(p=>{
+    ctx2.globalAlpha=p.alpha;
+    ctx2.fillText(p.emoji, p.x, p.y);
+    p.x+=p.vx; p.y+=p.vy;
+    if(p.x<-30)p.x=cvs.width+30;
+    if(p.x>cvs.width+30)p.x=-30;
+    if(p.y<-30)p.y=cvs.height+30;
+    if(p.y>cvs.height+30)p.y=-30;
+  });
+  ctx2.globalAlpha=1;
+  requestAnimationFrame(animBg);
+}
+animBg();
+
+/* ─────────────────────────────────────────
+   게임 로직
+───────────────────────────────────────── */
+const DIFF = {
+  easy:   {max:50,  tries:15, label:'1 ~ 50'},
+  normal: {max:100, tries:10, label:'1 ~ 100'},
+  hard:   {max:200, tries:7,  label:'1 ~ 200'},
+  pig:    {max:500, tries:5,  label:'1 ~ 500'},
+};
+
+let secret = 0;
+let triesLeft = 10;
+let maxTries = 10;
+let maxNum = 100;
+let diffKey = 'easy';
+let history = [];
+let gameOver = false;
+let bestScore = null;   // 최소 시도 횟수 (정답 맞췄을 때)
+
+// 말풍선 메시지 세트
+const MSG_START = [
+  '🐷 내가 숫자를 꼭꼭 숨겼어요! 찾아보세요!',
+  '히히히~ 절대 못 찾을걸요?',
+  '🐷 준비됐나요? 시작해봐요!',
+  '뭐야뭐야, 덤벼보라고요!',
+];
+const MSG_UP = [
+  '🔺 더 크게! 내 코보다 큰 숫자예요!',
+  '⬆️ 올려올려~ 아직 멀었어요!',
+  '🐷 더 위쪽이에요! 코가 위로 향하네요!',
+  '위로위로~ 하늘을 봐봐요!',
+  '🔺 땡! 더 큰 수예요~ 힘내봐요!',
+];
+const MSG_DOWN = [
+  '🔻 더 작게! 내 꼬리보다 작아요!',
+  '⬇️ 낮춰낮춰~ 아직도 멀었네!',
+  '🐷 더 아래예요! 꼬리가 아래로 내려가요~',
+  '아이고, 너무 크게 불렀잖아요!',
+  '🔻 땡! 더 작은 수예요~ 힌트 드렸죠?',
+];
+const MSG_WIN = [
+  '🎉 대박!! 정답이에요! 돼지가 졌다!',
+  '😱 어떻게 알았어요?! 천재세요?!',
+  '🏆 맞아요!! 훌륭해요! 코인 드리고 싶다!',
+  '🐷 흑흑... 내가 졌어요... 다음엔 이길 거예요!',
+];
+const MSG_LOSE = [
+  '💀 ㅋㅋㅋ 못 맞췄죠?! 정답은 ',
+  '🐷 히힛! 이겼다! 정답은 ',
+  '😈 땡! 기회를 다 썼어요! 정답은 ',
+  '꼴깍... 아쉽네요! 정답은 ',
+];
+const MSG_NEAR = [
+  '🔥 엄청 뜨거워요!! 거의 다 왔어요!',
+  '💨 따뜻따뜻~! 매우 근접했어요!',
+  '🌡️ 뜨겁다 뜨거워! 한 발짝만 더!',
+];
+const MSG_FAR = [
+  '🧊 어어... 완전 차갑네요~ 멀리 갔어요!',
+  '❄️ 브르르~ 많이 떨어졌어요!',
+];
+const MSG_WARN = [
+  '😰 헉! 이제 기회가 ',
+  '🚨 위험위험! ',
+  '⚠️ 조심해요! 남은 기회 ',
+];
+
+function rnd(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+function startGame(){
+  const cfg = DIFF[diffKey];
+  maxNum = cfg.max;
+  maxTries = cfg.tries;
+  triesLeft = cfg.tries;
+  secret = Math.floor(Math.random()*maxNum)+1;
+  history = [];
+  gameOver = false;
+
+  document.getElementById('num-input').max = maxNum;
+  document.getElementById('num-input').min = 1;
+  document.getElementById('num-input').value = '';
+  document.getElementById('num-input').disabled = false;
+  document.getElementById('guess-btn').disabled = false;
+  document.getElementById('hint-bar').textContent = '';
+  document.getElementById('hint-bar').className = '';
+  document.getElementById('range-txt').textContent = '범위: '+cfg.label;
+  document.getElementById('history-wrap').innerHTML = '<span style="color:#333;">— 추측 기록이 여기에 표시됩니다 —</span>';
+  document.getElementById('overlay').classList.remove('show');
+
+  setBubble(rnd(MSG_START), false, false);
+  updateHearts();
+  animPig('bounce');
+  console.log('[DEV] 정답:', secret); // 개발용 힌트
+}
+
+function setBubble(txt, warn=false, win=false){
+  const el = document.getElementById('bubble');
+  el.textContent = txt;
+  el.className = win ? 'win' : warn ? 'warn' : '';
+}
+
+function updateHearts(){
+  const hearts = '❤️'.repeat(triesLeft) + (triesLeft<maxTries?'🖤'.repeat(maxTries-triesLeft):'');
+  document.getElementById('tries-hearts').textContent = hearts;
+}
+
+function animPig(type){
+  const el = document.getElementById('pig-svg');
+  el.classList.remove('bounce','shake');
+  void el.offsetWidth; // reflow
+  el.classList.add(type);
+}
+
+function floatText(txt, col){
+  const el = document.createElement('div');
+  el.className = 'float-txt';
+  el.style.color = col;
+  el.style.left = (Math.random()*60+20)+'vw';
+  el.style.top = (Math.random()*40+20)+'vh';
+  el.textContent = txt;
+  document.body.appendChild(el);
+  let fy=0, op=1;
+  const tick=()=>{
+    fy-=1.5; op-=0.025;
+    el.style.transform=`translateY(${fy}px)`;
+    el.style.opacity=Math.max(0,op);
+    if(op>0) requestAnimationFrame(tick);
+    else el.remove();
+  };
+  requestAnimationFrame(tick);
+}
+
+function addHistory(n, result, className){
+  const box = document.getElementById('history-wrap');
+  // 첫 기록이면 빈 텍스트 지우기
+  if(history.length===1){
+    box.innerHTML='';
+  }
+  const row = document.createElement('div');
+  row.className='h-row';
+  row.innerHTML=`<span class="h-num">${history.length}.</span><span style="color:#888">${n}번</span> → <span class="h-res ${className}">${result}</span>`;
+  box.appendChild(row);
+  box.scrollTop = box.scrollHeight;
+}
+
+function guess(){
+  if(gameOver) return;
+  const input = document.getElementById('num-input');
+  const n = parseInt(input.value);
+  if(isNaN(n)||n<1||n>maxNum){
+    setBubble(`🐷 1부터 ${maxNum} 사이 숫자를 입력해줘요!`, true);
+    animPig('shake');
+    return;
+  }
+  input.value = '';
+  triesLeft--;
+  history.push(n);
+  updateHearts();
+
+  const diff = Math.abs(n - secret);
+
+  if(n === secret){
+    // 정답!
+    gameOver = true;
+    const tries = history.length;
+    if(bestScore===null||tries<bestScore) bestScore=tries;
+    document.getElementById('score-txt').textContent = `🏆 최고 기록: ${bestScore} 번`;
+
+    const hintEl = document.getElementById('hint-bar');
+    hintEl.textContent = '🎉 PERFECT! 🎉';
+    hintEl.className = 'win';
+
+    setBubble(rnd(MSG_WIN), false, true);
+    animPig('bounce');
+    addHistory(n,'✅ 정답!','win');
+
+    for(let i=0;i<5;i++) setTimeout(()=>floatText(['🎉','⭐','🏆','🐷','✨'][i], '#ffe84d'), i*120);
+
+    document.getElementById('num-input').disabled=true;
+    document.getElementById('guess-btn').disabled=true;
+
+    setTimeout(()=>{
+      document.getElementById('ov-title').textContent = '🏆 정답!';
+      document.getElementById('ov-title').style.color = '#ffe84d';
+      document.getElementById('ov-sub').textContent = `${tries}번 만에 맞혔어요! 🐷`;
+      document.getElementById('overlay').classList.add('show');
+    },900);
+
+  } else if(triesLeft===0){
+    // 패배
+    gameOver = true;
+    const loseMsg = rnd(MSG_LOSE) + secret + ' 이었어요!';
+    setBubble(loseMsg, true);
+    animPig('shake');
+
+    const hintEl = document.getElementById('hint-bar');
+    hintEl.textContent = '💀 GAME OVER 💀';
+    hintEl.className = 'warn';
+
+    addHistory(n, n>secret?'▼ 더 작게':'▲ 더 크게', n>secret?'down':'up');
+
+    floatText('💀 FAIL!', '#ff4444');
+
+    document.getElementById('num-input').disabled=true;
+    document.getElementById('guess-btn').disabled=true;
+
+    setTimeout(()=>{
+      document.getElementById('ov-title').textContent = '💀 아쉽!';
+      document.getElementById('ov-title').style.color = '#ff4444';
+      document.getElementById('ov-sub').textContent = `정답은 ${secret} 이었어요...`;
+      document.getElementById('overlay').classList.add('show');
+    },800);
+
+  } else {
+    // 계속
+    const hintEl = document.getElementById('hint-bar');
+    if(n < secret){
+      const msg = diff<=5 ? rnd(MSG_NEAR) : diff>maxNum*0.35 ? rnd(MSG_FAR) : rnd(MSG_UP);
+      setBubble(msg);
+      hintEl.textContent = '▲ UP! 더 크게 입력하세요';
+      hintEl.className = 'up';
+      addHistory(n, '▲ 더 크게!', 'up');
+      animPig('bounce');
+      floatText('🔺 UP!', '#ff8800');
+    } else {
+      const msg = diff<=5 ? rnd(MSG_NEAR) : diff>maxNum*0.35 ? rnd(MSG_FAR) : rnd(MSG_DOWN);
+      setBubble(msg);
+      hintEl.textContent = '▼ DOWN! 더 작게 입력하세요';
+      hintEl.className = 'down';
+      addHistory(n, '▼ 더 작게!', 'down');
+      animPig('bounce');
+      floatText('🔻 DOWN!', '#4488ff');
+    }
+
+    // 기회 적을 때 경고
+    if(triesLeft<=3){
+      setTimeout(()=>{
+        setBubble(rnd(MSG_WARN)+triesLeft+'번 남았어요! 서둘러요!', true);
+      }, 600);
+    }
+  }
+
+  input.focus();
+}
+
+// 힌트 기능: 범위 절반으로 좁혀주기 (하트 2 소모)
+function useHint(){
+  if(gameOver||triesLeft<3) return;
+  triesLeft -= 2;
+  updateHearts();
+  const low  = Math.max(1, secret - Math.floor(maxNum*0.12));
+  const high = Math.min(maxNum, secret + Math.floor(maxNum*0.12));
+  setBubble(`💡 힌트: 정답은 ${low} ~ ${high} 사이에 있어요! (❤️2 소모)`, false);
+  document.getElementById('hint-bar').textContent = `💡 ${low} ≤ 정답 ≤ ${high}`;
+  document.getElementById('hint-bar').className = 'win';
+  animPig('bounce');
+}
+
+/* ─────────────────────────────────────────
+   이벤트 바인딩
+───────────────────────────────────────── */
+document.getElementById('guess-btn').addEventListener('click', guess);
+document.getElementById('num-input').addEventListener('keydown', e=>{
+  if(e.key==='Enter') guess();
+});
+document.getElementById('new-btn').addEventListener('click', startGame);
+document.getElementById('ov-btn').addEventListener('click', startGame);
+document.getElementById('hint-btn').addEventListener('click', useHint);
+
+// 난이도 버튼
+document.querySelectorAll('.diff-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.diff-btn').forEach(b=>b.classList.remove('on'));
+    btn.classList.add('on');
+    diffKey = btn.dataset.diff;
+    startGame();
+  });
+});
+
+// 시작
+startGame();
+</script>
+</body>
+</html>
